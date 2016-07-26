@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 import operator
 # 前复权日K
 # 日期 开盘 最高 最低 收盘 成交量
+
+
 class LowTest:
     def __init__(self, client):
         self.client = client
@@ -18,8 +20,7 @@ class LowTest:
         self.bad_date = datetime.strptime("20150611", "%Y%m%d")
 
     def find_index_pos(self, date):
-        n = len(self.index_klines)
-        b, e = 0, n - 1
+        b, e = 0, len(self.index_klines) - 1
         while b <= e:
             mid = int((b + e) / 2)
             if self.index_klines[mid][0] == date:
@@ -53,7 +54,7 @@ class LowTest:
             if self.is_price_buy_signal(price_ma5, price_ma20, i) and self.is_vol_buy_signal(vol_ma20, vol_ma30, i):
                 buy_price = klines[i][4]
                 buy_date = klines[i][0]
-            if self.is_price_sell_signal(price_ma5, price_ma20, i):  # sell signal
+            if self.is_price_sell_signal(price_ma5, price_ma20, i):
                 if buy_price > 0:
                     # 脏数据，复权出现问题
                     if not self.utils.dirty_area(symbol, klines[i-100:i], buy_date, klines[i][0]):
@@ -105,17 +106,16 @@ class LowTest:
         bad_end_day = self.bad_date + timedelta(365)
         if self.bad_date < dt < bad_end_day:
             return True
-        PRE_DAYS = 10
+        pre_days = 10
         index_i = self.find_index_pos(date)
-        if index_i > PRE_DAYS:
-            preclose = -1
-            for i in range(index_i - PRE_DAYS, index_i):
-                if preclose > 0:
-                    close = self.index_klines[i][4]
-                    change = (close - preclose) / preclose
+        if index_i > pre_days:
+            pre_close = -1
+            for i in range(index_i - pre_days, index_i):
+                if pre_close > 0:
+                    change = (self.index_klines[i][4] - pre_close) / pre_close
                     if change <= -0.03:
                         return True
-                preclose = self.index_klines[i][4]
+                pre_close = self.index_klines[i][4]
         return False
 
     def is_price_sell_signal(self, ma5, ma10, ma20, bars, i):

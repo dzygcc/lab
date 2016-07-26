@@ -7,13 +7,17 @@ import plotly.graph_objs as go
 from datetime import timedelta
 import redis
 
+
 # plotly.sign_in(username='dzy', api_key='4dkuzf1c70')
 class SymbolUtils:
     def __init__(self, redis_client, construct_kline_map=True):
         self.client = redis_client
-        # 000001.SH
+        self.SZ_SYMBOL = "000001.SH"
+        self.CHART_DAY = "chart:day:"
+        self.CHART_BDAY = "chart:brday:"
         # {date->kline}
-        #self.index_map = self.get_sh_index_kmap()
+        self.index_map = {}
+        self.kmap = {}
         # all symbols kline map
         # {symbol -> {date -> kline}}
         if construct_kline_map:
@@ -30,8 +34,7 @@ class SymbolUtils:
         return ret
 
     def get_sh_index_kmap(self):
-        symbol = "000001.SH"
-        key = "chart:day:" + symbol
+        key = self.CHART_DAY + self.SZ_SYMBOL
         raws = self.client.hgetall(key)
         ret = {}
         for day in raws.keys():
@@ -42,8 +45,7 @@ class SymbolUtils:
         return ret
 
     def get_sh_index_klines(self):
-        symbol = "000001.SH"
-        key = "chart:day:" + symbol
+        key = self.CHART_DAY + self.SZ_SYMBOL
         raws = self.client.hgetall(key)
         ret = []
         for day in sorted(raws.keys()):
@@ -57,7 +59,7 @@ class SymbolUtils:
         symbols = self.get_symbols()
         self.kmap = {}
         for symbol in symbols:
-            key = "chart:brday:" + symbol
+            key = self.CHART_BDAY + symbol
             raws = self.client.hgetall(key)
             self.kmap[symbol] = {}
             for day in raws.keys():
@@ -170,7 +172,7 @@ class SymbolUtils:
     # 取前复权日K
     # return klines list sorted by date
     def get_bday_kline(self, symbol):
-        key = "chart:brday:" + symbol
+        key = self.CHART_BDAY + symbol
         raws = self.client.hgetall(key)
         ret = []
         # 按日期排序
@@ -182,7 +184,7 @@ class SymbolUtils:
         return ret
 
     def get_klines_with_last_date(self, symbol, last_day):
-        key = "chart:brday:" + symbol
+        key = self.CHART_BDAY + symbol
         raws = self.client.hgetall(key)
         ret = []
         # 按日期排序
@@ -195,7 +197,7 @@ class SymbolUtils:
 
     # 返回当日k线，如果没有返回上一个交易日
     def get_pre_kline(self, symbol, dt):
-        line = self.client.hget("chart:brday:" + symbol, dt.strftime("%Y%m%d"))
+        line = self.client.hget(self.CHART_BDAY + symbol, dt.strftime("%Y%m%d"))
         yest = dt
         count = 0
         while not line:
@@ -203,12 +205,12 @@ class SymbolUtils:
             if count > 30:
                 return None
             yest = yest - timedelta(1)
-            line = self.client.hget("chart:brday:" + symbol, yest.strftime("%Y%m%d"))
+            line = self.client.hget(self.CHART_BDAY + symbol, yest.strftime("%Y%m%d"))
         return self.parse_day_bar(line)
 
     # 返回当日k线，如果没有返回后一个交易日
     def get_after_kline(self, symbol, dt):
-        line = self.client.hget("chart:brday:" + symbol, dt.strftime("%Y%m%d"))
+        line = self.client.hget(self.CHART_BDAY + symbol, dt.strftime("%Y%m%d"))
         yest = dt
         count = 0
         while not line:
@@ -216,14 +218,14 @@ class SymbolUtils:
             if count > 30:
                 return None
             yest = yest + timedelta(1)
-            line = self.client.hget("chart:brday:" + symbol, yest.strftime("%Y%m%d"))
+            line = self.client.hget(self.CHART_BDAY + symbol, yest.strftime("%Y%m%d"))
         return self.parse_day_bar(line)
 
     def get_after_klines(self, symbol, dt, days):
         ret = []
         now = datetime.now()
         while days > 0 and dt < now:
-            line = self.client.hget("chart:brday:" + symbol, dt.strftime("%Y%m%d"))
+            line = self.client.hget(self.CHART_BDAY + symbol, dt.strftime("%Y%m%d"))
             if not line:
                 dt = dt + timedelta(1)
                 continue
@@ -290,8 +292,7 @@ class SymbolUtils:
 
     # since format = "%Y%m%d"
     def get_all_trading_days(self, since):
-        symbol = "000001.SH"
-        key = "chart:day:" + symbol
+        key = self.CHART_DAY + self.SZ_SYMBOL
         raws = self.client.hgetall(key)
         ret = [since]
         for day in sorted(raws.keys()):
@@ -315,14 +316,15 @@ class SymbolUtils:
         x = []
         trading_days = self.get_all_trading_days("20000101")
         for d in trading_days:
-            for symbol in portfolio.keys():
-                position = portfolio[symbol]
+            # update market price
+            for symbol, position in portfolio.items():
                 if d not in self.kmap[symbol]:
                     continue
                 bar = self.kmap[symbol][d]
                 if not bar:
                     continue
                 position["market_price"] = bar[4]
+
             x.append(datetime.strptime(d, "%Y%m%d"))
             cash += self.close_position(portfolio, d)
             if d in trade_map.keys():
@@ -335,9 +337,7 @@ class SymbolUtils:
                     cash = self.filled(cash, portfolio, trade_map[d])
             nlv = self.compute_net_value(cash, portfolio)
             net_value_arr.append(nlv)
-            # print("%s : %0.4f" % (d, len(portfolio)))
         self.visulize(x, net_value_arr, "nlv")
-
 
     def compute_net_value(self, cash, portfolio):
         if not portfolio:
@@ -401,8 +401,7 @@ class SymbolUtils:
             position["symbol"] = symbol
             position["market_price"] = trade[1]
             if symbol in portfolio.keys():
-                print("openOrder error. %s %s %s %0.4f" % (symbol, portfolio[symbol]["close_date"], trade[3],
-                                                           portfolio[symbol]["quantity"]))
+                print("openOrder error. %s %s %s" % (symbol, portfolio[symbol]["close_date"], trade[3]))
                 portfolio[symbol]["quantity"] += quantity
             else:
                 portfolio[symbol] = position
