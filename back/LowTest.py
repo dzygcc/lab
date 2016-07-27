@@ -37,7 +37,7 @@ class LowTest:
         for i in range(0, len(symbols)):
             price_trades.extend(self.trade_with_price(symbols[i]))
             if i % 100 == 0:
-                print("=== %0.2f ===" % (i*100 / len(symbols)))
+                print("=== %0.2f%% ===" % (i*100 / len(symbols)))
         print("trade num = %d" % (len(price_trades)))
         self.utils.net_value_trends(price_trades)
 
@@ -106,14 +106,14 @@ class LowTest:
         bad_end_day = self.bad_date + timedelta(365)
         if self.bad_date < dt < bad_end_day:
             return True
-        pre_days = 10
+        danger_days = 3
         index_i = self.find_index_pos(date)
-        if index_i > pre_days:
+        if index_i > danger_days:
             pre_close = -1
-            for i in range(index_i - pre_days, index_i):
+            for i in range(index_i - danger_days, index_i):
                 if pre_close > 0:
                     change = (self.index_klines[i][4] - pre_close) / pre_close
-                    if change <= -0.03:
+                    if change <= -0.02:
                         return True
                 pre_close = self.index_klines[i][4]
         return False

@@ -10,28 +10,24 @@ import redis
 
 # plotly.sign_in(username='dzy', api_key='4dkuzf1c70')
 class SymbolUtils:
-    def __init__(self, redis_client, construct_kline_map=True):
+    def __init__(self, redis_client):
         self.client = redis_client
         self.SZ_SYMBOL = "000001.SH"
         self.CHART_DAY = "chart:day:"
         self.CHART_BDAY = "chart:brday:"
         # {date->kline}
         self.index_map = {}
-        self.kmap = {}
-        # all symbols kline map
-        # {symbol -> {date -> kline}}
-        if construct_kline_map:
-            self.construct_kline_map()
+        self.symbols = []
 
     def get_symbols(self):
-        symbols = self.client.smembers("symbols")
-        ret = []
-        for s in symbols:
+        if len(self.symbols) > 0:
+            return self.symbols[:1000]
+        for s in self.client.smembers("symbols"):
             val = s.decode("utf-8")
             tmp = val.split(":")
             if len(tmp) == 3 and re.match(r"60\d+$|00\d+$|30\d+$", tmp[0]):
-                ret.append(tmp[0])
-        return ret
+                self.symbols.append(tmp[0])
+        return self.symbols[:1000]
 
     def get_sh_index_kmap(self):
         key = self.CHART_DAY + self.SZ_SYMBOL
@@ -56,16 +52,19 @@ class SymbolUtils:
         return ret
 
     def construct_kline_map(self):
-        symbols = self.get_symbols()
-        self.kmap = {}
-        for symbol in symbols:
+        print("start construct kline map.")
+        self.symbols = self.get_symbols()
+        ret = {}
+        for symbol in self.symbols:
             key = self.CHART_BDAY + symbol
             raws = self.client.hgetall(key)
-            self.kmap[symbol] = {}
+            ret[symbol] = {}
             for day in raws.keys():
                 line = raws[day].decode("utf-8")
                 bar = self.parse_day_bar(line)
-                self.kmap[symbol][day.decode("utf-8")] = bar
+                ret[symbol][day.decode("utf-8")] = bar
+        print("end construct kline map.")
+        return ret
 
     def get_index_change(self, date):
         if not self.index_map or len(self.index_map) == 0:
@@ -256,7 +255,34 @@ class SymbolUtils:
                 x=xdata,
                 y=ydata)
                 ]
-        plotly.offline.plot(data, filename=file_name)
+        layout = go.Layout(
+            xaxis=dict(
+                showgrid=True,
+                zeroline=True,
+                showline=True,
+                mirror='ticks',
+                gridcolor='#bdbdbd',
+                gridwidth=2,
+                zerolinecolor='#969696',
+                zerolinewidth=4,
+                linecolor='#636363',
+                linewidth=6
+            ),
+            yaxis=dict(
+                showgrid=True,
+                zeroline=True,
+                showline=True,
+                mirror='ticks',
+                gridcolor='#bdbdbd',
+                gridwidth=2,
+                zerolinecolor='#969696',
+                zerolinewidth=4,
+                linecolor='#636363',
+                linewidth=6
+            )
+        )
+        fig = go.Figure(data=data, layout=layout)
+        plotly.offline.plot(fig, filename=file_name)
 
     def visulize_yy(self, xd, yd1, yd2, file_name="xyy"):
         trace1 = go.Scatter(
@@ -304,6 +330,7 @@ class SymbolUtils:
     # portfolio = { symbol -> {"open_date"->, "open_price"->, "quantity":->} }
     # trades = [(symbol, buy_price, sell_price, buy_date, sell_date)]
     def net_value_trends(self, trades):
+        print("start compute net value trends.")
         trade_map = {}
         for trade in trades:
             buy_date = trade[3]
@@ -315,6 +342,7 @@ class SymbolUtils:
         net_value_arr = []
         x = []
         trading_days = self.get_all_trading_days("20000101")
+        self.kmap = self.construct_kline_map()
         for d in trading_days:
             # update market price
             for symbol, position in portfolio.items():
@@ -338,10 +366,9 @@ class SymbolUtils:
             nlv = self.compute_net_value(cash, portfolio)
             net_value_arr.append(nlv)
         self.visulize(x, net_value_arr, "nlv")
+        print("compute net value trends end.")
 
     def compute_net_value(self, cash, portfolio):
-        if not portfolio:
-            return cash
         for symbol in portfolio:
             p = portfolio[symbol]
             cash += p["quantity"] * p["market_price"]
