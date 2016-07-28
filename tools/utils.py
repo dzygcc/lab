@@ -21,13 +21,13 @@ class SymbolUtils:
 
     def get_symbols(self):
         if len(self.symbols) > 0:
-            return self.symbols[:1000]
+            return self.symbols
         for s in self.client.smembers("symbols"):
             val = s.decode("utf-8")
             tmp = val.split(":")
             if len(tmp) == 3 and re.match(r"60\d+$|00\d+$|30\d+$", tmp[0]):
                 self.symbols.append(tmp[0])
-        return self.symbols[:1000]
+        return self.symbols
 
     def get_sh_index_kmap(self):
         key = self.CHART_DAY + self.SZ_SYMBOL
@@ -181,6 +181,26 @@ class SymbolUtils:
             if bar:
                 ret.append(bar)
         return ret
+
+    def get_pre_bday_bars(self, symbol, last_day, num):
+        last_dt = datetime.strptime(last_day, "%Y%m%d")
+        pipe = self.client.pipeline()
+        k = self.CHART_BDAY + symbol
+        pre_dt = last_day - timedelta(num*2)
+        while pre_dt < last_dt:
+            pipe.hget(k, last_dt.strftime("%Y%m%d"))
+            last_dt -= timedelta(1)
+        lines = pipe.execute()
+        ret = []
+        i = 0
+        while i < len(lines):
+            if lines[i]:
+                line = lines[i].decode("utf-8")
+                ret.append(self.parse_day_bar(line))
+                if len(ret) == num:
+                    return ret.reverse()
+                i += 1
+        return None
 
     def get_klines_with_last_date(self, symbol, last_day):
         key = self.CHART_BDAY + symbol
@@ -360,12 +380,12 @@ class SymbolUtils:
                     cash = self.filled(cash, portfolio, trade_map[d])
                 else:
                     # print("cash not enough, close max profit position.")
-                    for i in range(0, int((len(portfolio)+1)/2)):
-                        cash += self.close_one_position(portfolio)
+                    #for i in range(0, int((len(portfolio)+1)/2)):
+                    #    cash += self.close_one_position(portfolio)
                     cash = self.filled(cash, portfolio, trade_map[d])
             nlv = self.compute_net_value(cash, portfolio)
             net_value_arr.append(nlv)
-        self.visulize(x, net_value_arr, "nlv")
+        self.visulize(x, net_value_arr, "nlv.html")
         print("compute net value trends end.")
 
     def compute_net_value(self, cash, portfolio):
@@ -417,6 +437,8 @@ class SymbolUtils:
         if len(trades) == 0:
             return cash
         for trade in trades:
+            if cash <= 0:
+                break
             quantity = (cash / len(trades)) / trade[1]
             position = {}
             symbol = trade[0]
