@@ -21,13 +21,13 @@ class SymbolUtils:
 
     def get_symbols(self):
         if len(self.symbols) > 0:
-            return self.symbols
+            return self.symbols[:100]
         for s in self.client.smembers("symbols"):
             val = s.decode("utf-8")
             tmp = val.split(":")
             if len(tmp) == 3 and re.match(r"60\d+$|00\d+$|30\d+$", tmp[0]):
                 self.symbols.append(tmp[0])
-        return self.symbols
+        return self.symbols[:100]
 
     def get_sh_index_kmap(self):
         key = self.CHART_DAY + self.SZ_SYMBOL
@@ -275,6 +275,44 @@ class SymbolUtils:
                 x=xdata,
                 y=ydata)
                 ]
+        layout = go.Layout(
+            xaxis=dict(
+                showgrid=True,
+                zeroline=True,
+                showline=True,
+                mirror='ticks',
+                gridcolor='#bdbdbd',
+                gridwidth=2,
+                zerolinecolor='#969696',
+                zerolinewidth=4,
+                linecolor='#636363',
+                linewidth=6
+            ),
+            yaxis=dict(
+                showgrid=True,
+                zeroline=True,
+                showline=True,
+                mirror='ticks',
+                gridcolor='#bdbdbd',
+                gridwidth=2,
+                zerolinecolor='#969696',
+                zerolinewidth=4,
+                linecolor='#636363',
+                linewidth=6
+            )
+        )
+        fig = go.Figure(data=data, layout=layout)
+        plotly.offline.plot(fig, filename=file_name)
+
+    def visulize_array(self, xd, yarr, file_name="xyy"):
+        data = []
+        for ydata in yarr:
+            trace = go.Scatter(
+                x=xd,
+                y=ydata,
+                yaxis='y'
+            )
+            data.append(trace)
         layout = go.Layout(
             xaxis=dict(
                 showgrid=True,

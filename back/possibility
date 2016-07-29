@@ -1,16 +1,12 @@
 # -*- coding: utf-8 -*-
-from datetime import timedelta
-from datetime import datetime
 import redis
 
-from back.LowTest import LowTest
 from tools.szzs_tool import ShangHaiIndex
 from tools.utils import SymbolUtils
 
 
 class Possibility:
     def __init__(self, cli):
-        self.name = "p"
         self.utils = SymbolUtils(cli)
         self.sh_tool = ShangHaiIndex(cli)
 
@@ -25,7 +21,7 @@ class Possibility:
                 else:
                     for i in range(0, len(ret[year])):
                         result[year][i].extend(ret[year][i])
-        self.print_gain(result, "All")
+        self.visualize(result)
 
     def is_up_trend(self, ma5, ma10, ma20):
         if ma5 > ma10 > ma20:
@@ -51,7 +47,7 @@ class Possibility:
             year = klines[i][0][0:4]
             if year not in gain:
                 gain[year] = [[], [], [], [], []]
-            if not self.sh_tool.is_index_up(klines[i][0]):
+            if not self.sh_tool.is_index_up(klines[i][0]) or self.sh_tool.is_danger_signal(klines[i][0]):
                 continue
             if i >= 1:
                 if up_trends[i] == True and up_trends[i - 1] == False:
@@ -88,6 +84,25 @@ class Possibility:
                     print("symbol=%s year=%s i=%d trade_num=%d expect=%0.4f success=%0.4f" %
                       (symbol, year, i + 1, trade_num, expect / trade_num, succ_count / trade_num))
 
+    def visualize(self, gain):
+        x = []
+        y_arr = []
+        for year in sorted(gain.keys()):
+            x.append(year)
+            if len(y_arr) == 0:
+                y_arr = [[] for i in range(0, len(gain[year]))]
+            for i in range(0, len(gain[year])): # 第i条曲线
+                succ_count = 0
+                expect = 0
+                for j in range(0, len(gain[year][i])):
+                    if gain[year][i][j] > 0:
+                        succ_count += 1
+                    expect += gain[year][i][j]
+                trade_num = len(gain[year][i])
+                if trade_num > 0:
+                    y_arr[i].append(succ_count/trade_num)
+        self.utils.visulize_array(x, y_arr, "p.html")
+
     def print_p(self, ret, symbol):
         for year in ret.keys():
             for i in range(0, len(ret[year]) - 1):
@@ -100,3 +115,4 @@ if __name__ == "__main__":
     r = redis.StrictRedis(host='127.0.0.1', port=6379, db=4)
     test = Possibility(r)
     test.up_possibility()
+
