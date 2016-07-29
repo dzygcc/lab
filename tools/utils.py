@@ -480,6 +480,22 @@ class SymbolUtils:
                 return parts[0], float(parts[1]), int(parts[2]), float(parts[3]), int(parts[4])
         return None
 
+    @staticmethod
+    def get_stock_price_ma(lines, n):
+        if n <= 0:
+            print("error")
+            return None
+        ma_ret = [0] * len(lines)
+        sum_close = [0] * len(lines)
+        for i in range(0, len(lines)):
+            if i > 0:
+                sum_close[i] += sum_close[i - 1] + lines[i][4]
+            else:
+                sum_close[i] = lines[i][4]
+        for i in range(n, len(lines)):
+            ma_ret[i] = (sum_close[i] - sum_close[i-n]) / n
+        return ma_ret
+
 if __name__ == "__main__":
     r = redis.StrictRedis(host='127.0.0.1', port=6379, db=4)
     su = SymbolUtils(r)

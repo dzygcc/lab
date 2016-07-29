@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import redis
+
+from tools.szzs_tool import ShangHaiIndex
 from tools.utils import SymbolUtils
 from datetime import datetime, timedelta
 import operator
@@ -13,23 +15,7 @@ class LowTest:
         self.utils = SymbolUtils(client)
         self.PRE_DAYS = 18
         self.AFTER_DAYS = 2
-        self.index_klines = self.utils.get_sh_index_klines()
-        self.index_ma5 = self.get_stock_price_ma(self.index_klines, 5)
-        self.index_ma10 = self.get_stock_price_ma(self.index_klines, 10)
-        self.index_ma20 = self.get_stock_price_ma(self.index_klines, 20)
-        self.bad_date = datetime.strptime("20150611", "%Y%m%d")
-
-    def find_index_pos(self, date):
-        b, e = 0, len(self.index_klines) - 1
-        while b <= e:
-            mid = int((b + e) / 2)
-            if self.index_klines[mid][0] == date:
-                return mid
-            elif self.index_klines[mid][0] < date:
-                b = mid + 1
-            else:
-                e = mid - 1
-        return -1
+        self.sh_tool = ShangHaiIndex(client)
 
     def test_all(self):
         symbols = self.utils.get_symbols()
@@ -66,16 +52,16 @@ class LowTest:
     # line= [日期0 开盘1 最高2 最低3 收盘4 成交量5]
     def trade_with_price(self, symbol):
         klines = self.utils.get_bday_kline(symbol)
-        price_ma5 = self.get_stock_price_ma(klines, 5)
-        price_ma10 = self.get_stock_price_ma(klines, 10)
-        price_ma20 = self.get_stock_price_ma(klines, 20)
+        price_ma5 = SymbolUtils.get_stock_price_ma(klines, 5)
+        price_ma10 = SymbolUtils.get_stock_price_ma(klines, 10)
+        price_ma20 = SymbolUtils.get_stock_price_ma(klines, 20)
         vol_ma20 = self.get_stock_vol_ma(klines, 20)
         trades = []
         buy_price = -1
         buy_index = -1
         i = 20
         while i < len(klines):
-            danger = self.is_danger_signal(klines[i][0])
+            danger = self.sh_tool.is_danger_signal(klines[i][0])
             if not danger and buy_price < 0 and self.can_buy(klines) \
                     and self.is_price_buy_signal(price_ma5, price_ma10, price_ma20, klines[i-self.PRE_DAYS:i], i):
                 buy_price = klines[i][4]
@@ -95,34 +81,14 @@ class LowTest:
     def is_price_buy_signal(self, ma5, ma10, ma20, bars, i):
         if not ma5 or not ma20 or len(ma20) <= i:
             return False
-        if ma5[i] > ma10[i] > ma20[i] and ma5[i] > ma5[i-1]:
-            index_i = self.find_index_pos(bars[-1][0])
-            if index_i >= 0 and self.index_ma5[index_i] > self.index_ma10[index_i] > self.index_ma20[index_i]:
-                return True
-        return False
-
-    def is_danger_signal(self, date):
-        dt = datetime.strptime(date, "%Y%m%d")
-        bad_end_day = self.bad_date + timedelta(365)
-        if self.bad_date < dt < bad_end_day:
+        if ma5[i] > ma10[i] > ma20[i] and ma5[i] > ma5[i-1] and self.sh_tool.is_index_up(bars[-1][0]):
             return True
-        danger_days = 3
-        index_i = self.find_index_pos(date)
-        if index_i > danger_days:
-            pre_close = -1
-            for i in range(index_i - danger_days, index_i):
-                if pre_close > 0:
-                    change = (self.index_klines[i][4] - pre_close) / pre_close
-                    if change <= -0.02:
-                        return True
-                pre_close = self.index_klines[i][4]
         return False
 
     def is_price_sell_signal(self, ma5, ma10, ma20, bars, i):
         if ma5[i] < ma20[i]:
             return True
-        pos = self.find_index_pos(bars[-1][0])
-        if pos > 0 and self.index_ma5[pos] < self.index_ma10[pos] < self.index_ma20[pos] and ma5[i] < ma10[i]:
+        if self.sh_tool.is_index_down(bars[-1][0]) and ma5[i] < ma10[i]:
             return True
         return False
 
@@ -304,18 +270,6 @@ class LowTest:
         self.utils.visulize_yy(x, y1, y2, file_prefix + "goodExpect-badExpect")
         self.utils.visulize_yy(x, y1, y3, file_prefix + "goodExpect-tradeCounter")
         self.utils.visulize_yy(x, y1, y4, file_prefix + "goodExpect-dayNum")
-
-    def test_index_ma(self):
-        dt = datetime.strptime("20150501", "%Y%m%d")
-        now = datetime.now()
-        while dt < now:
-            dt = dt + timedelta(1)
-            datestr = dt.strftime("%Y%m%d")
-            flag = False
-            index_i = self.find_index_pos(datestr)
-            if index_i >= 0 and self.index_ma5[index_i] > self.index_ma10[index_i] > self.index_ma20[index_i]:
-                flag = True
-            print("%s %s" % (datestr, flag))
 
 if __name__ == "__main__":
     r = redis.StrictRedis(host='127.0.0.1', port=6379, db=4)

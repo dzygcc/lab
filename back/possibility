@@ -1,0 +1,102 @@
+# -*- coding: utf-8 -*-
+from datetime import timedelta
+from datetime import datetime
+import redis
+
+from back.LowTest import LowTest
+from tools.szzs_tool import ShangHaiIndex
+from tools.utils import SymbolUtils
+
+
+class Possibility:
+    def __init__(self, cli):
+        self.name = "p"
+        self.utils = SymbolUtils(cli)
+        self.sh_tool = ShangHaiIndex(cli)
+
+    def up_possibility(self):
+        symbols = self.utils.get_symbols()
+        result = {}
+        for symbol in symbols:
+            ret = self.up_possibility_imp(symbol)
+            for year in ret.keys():
+                if year not in result:
+                    result[year] = ret[year]
+                else:
+                    for i in range(0, len(ret[year])):
+                        result[year][i].extend(ret[year][i])
+        self.print_gain(result, "All")
+
+    def is_up_trend(self, ma5, ma10, ma20):
+        if ma5 > ma10 > ma20:
+            return True
+        return False
+
+    def get_gain(self, klines, i):
+        if 0 < i < len(klines):
+            pre_close = klines[i - 1][4]
+            return (klines[i][4] - pre_close) / pre_close
+        return 0
+
+    def up_possibility_imp(self, symbol):
+        klines = self.utils.get_bday_kline(symbol)
+        price_ma5 = SymbolUtils.get_stock_price_ma(klines, 5)
+        price_ma10 = SymbolUtils.get_stock_price_ma(klines, 10)
+        price_ma20 = SymbolUtils.get_stock_price_ma(klines, 20)
+        up_trends = [False] * len(klines)
+        for i in range(0, len(klines)):
+            up_trends[i] = self.is_up_trend(price_ma5[i], price_ma10[i], price_ma20[i])
+        gain = {}
+        for i in range(0, len(klines)):
+            year = klines[i][0][0:4]
+            if year not in gain:
+                gain[year] = [[], [], [], [], []]
+            if not self.sh_tool.is_index_up(klines[i][0]):
+                continue
+            if i >= 1:
+                if up_trends[i] == True and up_trends[i - 1] == False:
+                    gain[year][0].append(self.get_gain(klines, i + 1))
+            if i >= 2:
+                if up_trends[i] == True and up_trends[i - 1] == True and up_trends[i - 2] == False:
+                    gain[year][1].append(self.get_gain(klines, i + 1))
+            if i >= 3:
+                if up_trends[i] == True and up_trends[i - 1] == True and up_trends[i - 2] == True \
+                        and up_trends[i - 3] == False:
+                    gain[year][2].append(self.get_gain(klines, i + 1))
+            if i >= 4:
+                if up_trends[i] == True and up_trends[i - 1] == True and up_trends[i - 2] == True \
+                        and up_trends[i - 3] == True and up_trends[i - 4] == False:
+                    gain[year][3].append(self.get_gain(klines, i + 1))
+            if i >= 5:
+                if up_trends[i] == True and up_trends[i - 1] == True and up_trends[i - 2] == True \
+                        and up_trends[i - 3] == True and up_trends[i - 4] == True and up_trends[i - 5] == False:
+                    gain[year][4].append(self.get_gain(klines, i + 1))
+        self.print_gain(gain, symbol)
+        return gain
+
+    def print_gain(self, gain, symbol):
+        for year in gain.keys():
+            for i in range(0, len(gain[year])):
+                succ_count = 0
+                expect = 0
+                for j in range(0, len(gain[year][i])):
+                    if gain[year][i][j] > 0:
+                        succ_count += 1
+                    expect += gain[year][i][j]
+                trade_num = len(gain[year][i])
+                if trade_num > 0:
+                    print("symbol=%s year=%s i=%d trade_num=%d expect=%0.4f success=%0.4f" %
+                      (symbol, year, i + 1, trade_num, expect / trade_num, succ_count / trade_num))
+
+    def print_p(self, ret, symbol):
+        for year in ret.keys():
+            for i in range(0, len(ret[year]) - 1):
+                if ret[year][i] > 0:
+                    print("symbol=%s year=%s i=%d num=%d p=%0.4f" %
+                          (symbol, year, i + 1, ret[year][i], ret[year][i + 1] / ret[year][i]))
+
+
+if __name__ == "__main__":
+    r = redis.StrictRedis(host='127.0.0.1', port=6379, db=4)
+    test = Possibility(r)
+    test.up_possibility()
