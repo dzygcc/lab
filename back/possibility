@@ -40,33 +40,34 @@ class Possibility:
         price_ma10 = SymbolUtils.get_stock_price_ma(klines, 10)
         price_ma20 = SymbolUtils.get_stock_price_ma(klines, 20)
         up_trends = [False] * len(klines)
-        for i in range(0, len(klines)):
+        for i in range(20, len(klines)):
             up_trends[i] = self.is_up_trend(price_ma5[i], price_ma10[i], price_ma20[i])
         gain = {}
-        for i in range(0, len(klines)):
+        for i in range(20, len(klines)):
             year = klines[i][0][0:4]
             if year not in gain:
                 gain[year] = [[], [], [], [], []]
             if not self.sh_tool.is_index_up(klines[i][0]) or self.sh_tool.is_danger_signal(klines[i][0]):
                 continue
-            if i >= 1:
-                if up_trends[i] == True and up_trends[i - 1] == False:
-                    gain[year][0].append(self.get_gain(klines, i + 1))
-            if i >= 2:
-                if up_trends[i] == True and up_trends[i - 1] == True and up_trends[i - 2] == False:
-                    gain[year][1].append(self.get_gain(klines, i + 1))
-            if i >= 3:
-                if up_trends[i] == True and up_trends[i - 1] == True and up_trends[i - 2] == True \
+            if price_ma5[i] < price_ma5[i-1]:
+                continue
+            if up_trends[i] == True and up_trends[i - 1] == False:
+                gain[year][0].append(self.get_gain(klines, i + 1))
+
+            if up_trends[i] == True and up_trends[i - 1] == True and up_trends[i - 2] == False:
+                gain[year][1].append(self.get_gain(klines, i + 1))
+
+            if up_trends[i] == True and up_trends[i - 1] == True and up_trends[i - 2] == True \
                         and up_trends[i - 3] == False:
-                    gain[year][2].append(self.get_gain(klines, i + 1))
-            if i >= 4:
-                if up_trends[i] == True and up_trends[i - 1] == True and up_trends[i - 2] == True \
+                gain[year][2].append(self.get_gain(klines, i + 1))
+
+            if up_trends[i] == True and up_trends[i - 1] == True and up_trends[i - 2] == True \
                         and up_trends[i - 3] == True and up_trends[i - 4] == False:
-                    gain[year][3].append(self.get_gain(klines, i + 1))
-            if i >= 5:
-                if up_trends[i] == True and up_trends[i - 1] == True and up_trends[i - 2] == True \
+                gain[year][3].append(self.get_gain(klines, i + 1))
+
+            if up_trends[i] == True and up_trends[i - 1] == True and up_trends[i - 2] == True \
                         and up_trends[i - 3] == True and up_trends[i - 4] == True and up_trends[i - 5] == False:
-                    gain[year][4].append(self.get_gain(klines, i + 1))
+                gain[year][4].append(self.get_gain(klines, i + 1))
         self.print_gain(gain, symbol)
         return gain
 
@@ -81,12 +82,14 @@ class Possibility:
                     expect += gain[year][i][j]
                 trade_num = len(gain[year][i])
                 if trade_num > 0:
+                    trade_num += 0.0
                     print("symbol=%s year=%s i=%d trade_num=%d expect=%0.4f success=%0.4f" %
                       (symbol, year, i + 1, trade_num, expect / trade_num, succ_count / trade_num))
 
     def visualize(self, gain):
         x = []
         y_arr = []
+        num = 0
         for year in sorted(gain.keys()):
             x.append(year)
             if len(y_arr) == 0:
@@ -99,9 +102,11 @@ class Possibility:
                         succ_count += 1
                     expect += gain[year][i][j]
                 trade_num = len(gain[year][i])
+                num += trade_num
                 if trade_num > 0:
-                    y_arr[i].append(succ_count/trade_num)
+                    y_arr[i].append(succ_count/(0.+trade_num))
         self.utils.visulize_array(x, y_arr, "p.html")
+        print("trade num = %d" % num)
 
     def print_p(self, ret, symbol):
         for year in ret.keys():

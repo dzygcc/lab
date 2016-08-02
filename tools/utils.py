@@ -21,7 +21,7 @@ class SymbolUtils:
 
     def get_symbols(self):
         if len(self.symbols) > 0:
-            return self.symbols[:100]
+            return self.symbols[:1000]
         for s in self.client.smembers("symbols"):
             val = s.decode("utf-8")
             tmp = val.split(":")
