@@ -78,10 +78,11 @@ class LowTest:
             i += 1
         return trades
 
-    def is_price_buy_signal(self, ma5, ma10, ma20, bars, i):
+    def is_price_buy_signal(self, ma5, ma10, ma20, bars, i, check_index=True):
         if not ma5 or not ma20 or len(ma20) <= i:
             return False
-        if ma5[i] > ma10[i] > ma20[i] and ma5[i] > ma5[i-1] and self.sh_tool.is_index_up(bars[-1][0]):
+        if ma5[i] > ma10[i] > ma20[i] and ma5[i] > ma5[i-1] and \
+                (not check_index or self.sh_tool.is_index_up(bars[-1][0])):
             return True
         return False
 

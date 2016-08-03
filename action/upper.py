@@ -8,7 +8,6 @@ from tools.utils import SymbolUtils
 
 class Upper:
     def __init__(self, cli):
-        self.abc = 0
         self.client = cli
         self.utils = SymbolUtils(cli, False)
 
