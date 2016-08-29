@@ -249,7 +249,7 @@ class SymbolUtils:
     def get_after_klines(self, symbol, dt, days):
         ret = []
         now = datetime.now()
-        while days > 0 and dt < now:
+        while days > 0 and dt <= now:
             line = self.client.hget(self.CHART_BDAY + symbol, dt.strftime("%Y%m%d"))
             if not line:
                 dt = dt + timedelta(1)
