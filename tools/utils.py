@@ -10,14 +10,14 @@ import redis
 
 # plotly.sign_in(username='dzy', api_key='4dkuzf1c70')
 class SymbolUtils:
-    def __init__(self, redis_client):
+    def __init__(self, redis_client, symbols=[]):
         self.client = redis_client
         self.SZ_SYMBOL = "000001.SH"
         self.CHART_DAY = "chart:day:"
         self.CHART_BDAY = "chart:brday:"
         # {date->kline}
         self.index_map = {}
-        self.symbols = []
+        self.symbols = symbols
 
     def get_symbols(self):
         if len(self.symbols) == 0:
@@ -26,7 +26,10 @@ class SymbolUtils:
                 tmp = val.split(":")
                 if len(tmp) == 3 and re.match(r"60\d+$|00\d+$|30\d+$", tmp[0]):
                     self.symbols.append(tmp[0])
-        return self.symbols[:500]
+        return self.symbols
+
+    def set_symbols(self, symbols):
+        self.symbols = symbols
 
     def get_sh_index_kmap(self):
         key = self.CHART_DAY + self.SZ_SYMBOL
@@ -51,19 +54,21 @@ class SymbolUtils:
         return ret
 
     def construct_kline_map(self):
-        print("start construct kline map.")
         self.symbols = self.get_symbols()
-        ret = {}
+        if len(self.index_map) > 0:
+            return self.index_map
+        print("start construct kline map.")
+        self.index_map = {}
         for symbol in self.symbols:
             key = self.CHART_BDAY + symbol
             raws = self.client.hgetall(key)
-            ret[symbol] = {}
+            self.index_map[symbol] = {}
             for day in raws.keys():
                 line = raws[day].decode("utf-8")
                 bar = self.parse_day_bar(line)
-                ret[symbol][day.decode("utf-8")] = bar
+                self.index_map[symbol][day.decode("utf-8")] = bar
         print("end construct kline map.")
-        return ret
+        return self.index_map
 
     def get_index_change(self, date):
         if not self.index_map or len(self.index_map) == 0:
@@ -396,7 +401,6 @@ class SymbolUtils:
     # portfolio = { symbol -> {"open_date"->, "open_price"->, "quantity":->} }
     # trades = [(symbol, buy_price, sell_price, buy_date, sell_date)]
     def net_value_trends(self, trades):
-        print("start compute net value trends.")
         trade_map = {}
         for trade in trades:
             buy_date = trade[3]
@@ -418,21 +422,15 @@ class SymbolUtils:
                 if not bar:
                     continue
                 position["market_price"] = bar[4]
-
             x.append(datetime.strptime(d, "%Y%m%d"))
             cash += self.close_position(portfolio, d)
             if d in trade_map.keys():
-                if cash > 0.05:
-                    cash = self.filled(cash, portfolio, trade_map[d])
-                else:
-                    # print("cash not enough, close max profit position.")
-                    #for i in range(0, int((len(portfolio)+1)/2)):
-                    #    cash += self.close_one_position(portfolio)
-                    cash = self.filled(cash, portfolio, trade_map[d])
+                for i in range(0, int((len(portfolio) + 1) / 2)):
+                    cash += self.close_one_position(portfolio)
+                cash = self.filled(cash, portfolio, trade_map[d])
             nlv = self.compute_net_value(cash, portfolio)
             net_value_arr.append(nlv)
-        self.visulize(x, net_value_arr, "nlv.html")
-        print("compute net value trends end.")
+        return x, net_value_arr
 
     def compute_net_value(self, cash, portfolio):
         for symbol in portfolio:
@@ -477,7 +475,7 @@ class SymbolUtils:
 
     @staticmethod
     def commission(market_value):
-        return market_value * 0.0013
+        return market_value * 0.00001
 
     def filled(self, cash, portfolio, trades):
         if len(trades) == 0:
@@ -541,6 +539,7 @@ class SymbolUtils:
         for i in range(n, len(lines)):
             ma_ret[i] = (sum_close[i] - sum_close[i-n]) / n
         return ma_ret
+
 
 if __name__ == "__main__":
     r = redis.StrictRedis(host='127.0.0.1', port=6379, db=4)

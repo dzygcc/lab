@@ -10,7 +10,8 @@ class Tech:
     def __init__(self):
         self.name = ""
 
-    def macd(self, df, n_fast, n_slow):
+    @staticmethod
+    def macd(df, n_fast, n_slow):
         fast = pd.Series(pd.ewma(df['close'], span=n_fast, min_periods=n_fast - 1))
         slow = pd.Series(pd.ewma(df['close'], span=n_slow, min_periods=n_slow - 1))
         md = pd.Series(fast - slow, name='macd')
@@ -40,14 +41,16 @@ class Tech:
 
     @staticmethod
     def convert_klines(klines):
-        close_arr = []
-        high_arr = []
-        low_arr = []
+        closes = []
+        highs = []
+        lows = []
+        dates = []
         for row in klines:
-            high_arr.append(row[1])
-            low_arr.append(row[2])
-            close_arr.append(row[3])
-        cls = {"close": close_arr, "high": high_arr, "low": low_arr}
+            dates.append(row[0])
+            highs.append(row[2])
+            lows.append(row[3])
+            closes.append(row[4])
+        cls = {"close": closes, "high": highs, "low": lows, "date": dates}
         df = pd.DataFrame(cls)
         return df
 

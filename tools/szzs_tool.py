@@ -12,7 +12,6 @@ class ShangHaiIndex:
         self.index_ma10 = SymbolUtils.get_stock_price_ma(self.index_klines, 10)
         self.index_ma20 = SymbolUtils.get_stock_price_ma(self.index_klines, 20)
         self.DANGER_CHANGE = -0.02
-        self.bad_date = datetime.strptime("20150611", "%Y%m%d")
 
     def find_index_pos(self, date):
         b, e = 0, len(self.index_klines) - 1
@@ -53,10 +52,6 @@ class ShangHaiIndex:
         return 0
 
     def is_danger_signal(self, date):
-        dt = datetime.strptime(date, "%Y%m%d")
-        bad_end_day = self.bad_date + timedelta(265)
-        if self.bad_date < dt < bad_end_day:
-            return True
         danger_days = 3
         index_i = self.find_index_pos(date)
         if index_i > danger_days:

@@ -25,7 +25,8 @@ class LowTest:
             if i % 100 == 0:
                 print("=== %0.2f%% ===" % (i*100 / len(symbols)))
         print("trade num = %d" % (len(price_trades)))
-        self.utils.net_value_trends(price_trades)
+        x, y = self.utils.net_value_trends(price_trades)
+        self.utils.visulize(x, y, "test_all")
 
     def trade_with_price_vol(self, symbol):
         klines = self.utils.get_bday_kline(symbol)
